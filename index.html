@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="it" class="h-full bg-slate-900 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Game P2P - GitHub Pages Ready</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome per Icone -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PeerJS CDN per Connessione P2P WebRTC gratuita -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Perspective per l'effetto carte 3D */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+        
+        /* Animazioni carte */
+        .card-transition {
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+        .card-transition:hover {
+            transform: translateY(-12px) scale(1.03);
+            box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.5);
+        }
+
+        .felt-table {
+            background-color: #0d47a1;
+            background-image: radial-gradient(#1565c0 15%, transparent 16%), radial-gradient(#0d47a1 15%, transparent 16%);
+            background-size: 30px 30px;
+            background-position: 0 0, 15px 15px;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col overflow-hidden">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-slate-950 border-b border-slate-800 px-4 py-3 flex justify-between items-center z-10 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="bg-amber-500 text-slate-950 p-2 rounded-lg font-black text-lg">
+                <i class="fa-solid font-bold fa-heart-suit"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-base md:text-lg leading-tight">CardP2P Engine</h1>
+                <p class="text-xs text-slate-400 hidden sm:block">Multiplayer senza Server per GitHub Pages (WebRTC)</p>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="flex bg-slate-800 p-1 rounded-lg text-xs md:text-sm">
+            <button id="tab-game-btn" onclick="switchTab('game')" class="px-3 md:px-4 py-1.5 rounded-md font-medium bg-amber-500 text-slate-950 transition-all flex items-center gap-2">
+                <i class="fa-solid fa-gamepad"></i> Stanza di Gioco
+            </button>
+            <button id="tab-guide-btn" onclick="switchTab('guide')" class="px-3 md:px-4 py-1.5 rounded-md font-medium text-slate-300 hover:text-white transition-all flex items-center gap-2">
+                <i class="fa-solid fa-book-open"></i> Guida Architettura
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-1 relative overflow-hidden bg-slate-900">
+
+        <!-- ================= SECTION 1: GAME APP ================= -->
+        <section id="tab-game" class="h-full flex flex-col md:flex-row relative">
+
+            <!-- SIDEBAR CONTROLS & CHAT -->
+            <aside class="w-full md:w-80 lg:w-96 bg-slate-950 border-r border-slate-800 flex flex-col shrink-0 h-1/3 md:h-full z-10">
+                <!-- User Profile & Room Info -->
+                <div class="p-4 border-b border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Il Tuo Profilo</span>
+                        <span id="role-badge" class="px-2 py-0.5 text-xs rounded-full bg-slate-800 text-slate-300 font-mono">Disconnesso</span>
+                    </div>
+                    
+                    <div class="flex items-center space-x-2">
+                        <input id="nickname-input" type="text" value="Giocatore" placeholder="Il tuo nome..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm w-full focus:outline-none focus:border-amber-500 text-white">
+                        <button onclick="updateNickname()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg text-sm border border-slate-700" title="Salva Nome">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                        </button>
+                    </div>
+
+                    <!-- Room Controls -->
+                    <div class="pt-2 border-t border-slate-800 space-y-2">
+                        <div id="room-create-section" class="space-y-2">
+                            <button onclick="createRoom()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 px-3 rounded-lg text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20">
+                                <i class="fa-solid fa-plus"></i> Crea Nuova Stanza (Host)
+                            </button>
+                            <div class="flex items-center gap-2 my-2">
+                                <div class="h-px bg-slate-800 flex-1"></div>
+                                <span class="text-xs text-slate-500">oppure entra</span>
+                                <div class="h-px bg-slate-800 flex-1"></div>
+                            </div>
+                            <div class="flex gap-2">
+                                <input id="join-room-id" type="text" placeholder="Incolla ID Stanza..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs flex-1 uppercase tracking-wider font-mono text-white">
+                                <button onclick="joinRoom()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs transition">
+                                    Unisciti
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Connected Room Active State -->
+                        <div id="room-active-section" class="hidden space-y-2 bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-400">ID Stanza:</span>
+                                <span id="display-room-id" class="text-xs font-mono font-bold text-amber-400 bg-slate-950 px-2 py-1 rounded">---</span>
+                            </div>
+                            <button onclick="copyRoomLink()" class="w-full bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 py-1.5 px-2 rounded border border-slate-700 flex items-center justify-center gap-2">
+                                <i class="fa-regular fa-copy"></i> Copia Link Invito
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Players List in Room -->
+                <div class="p-3 border-b border-slate-800 bg-slate-950/50">
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+                        <span>Giocatori Connessi</span>
+                        <span id="player-count" class="bg-slate-800 px-2 py-0.5 rounded-full text-xs text-amber-400 font-mono">0</span>
+                    </h3>
+                    <div id="players-list" class="space-y-1.5 max-h-28 overflow-y-auto pr-1">
+                        <!-- Dynamic Player Badges -->
+                        <div class="text-xs text-slate-500 italic text-center py-2">Nessuna stanza attiva</div>
+                    </div>
+                </div>
+
+                <!-- Live Network Logs / System Messages -->
+                <div class="flex-1 p-3 flex flex-col justify-between overflow-hidden bg-slate-950">
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-network-wired text-amber-500"></i> Eventi Rete (P2P Log)
+                    </h3>
+                    <div id="network-log" class="flex-1 bg-slate-900 border border-slate-800 rounded-lg p-2 font-mono text-[11px] overflow-y-auto space-y-1 text-slate-400">
+                        <div class="text-slate-600">[Sistema] Pronti per la connessione.</div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- VIRTUAL CARD TABLE AREA -->
+            <div class="flex-1 flex flex-col relative felt-table overflow-hidden">
+                
+                <!-- Host Control Bar (Only visible for Host) -->
+                <div id="host-controls" class="bg-slate-950/80 backdrop-blur border-b border-slate-800 p-2.5 px-4 flex items-center justify-between z-10 hidden">
+                    <div class="flex items-center gap-2 text-xs text-amber-400 font-medium">
+                        <i class="fa-solid fa-crown text-amber-400"></i>
+                        <span>Pannello Controllo Host (Mazzo Globale)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="hostResetDeck()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs px-3 py-1.5 rounded-md font-medium text-slate-200 flex items-center gap-1.5">
+                            <i class="fa-solid fa-rotate-right"></i> Ricrea & Mescola Mazzo
+                        </button>
+                        <button onclick="hostDealInitialCards()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs px-3 py-1.5 rounded-md font-bold flex items-center gap-1.5 shadow">
+                            <i class="fa-solid fa-cards"></i> Distribuisci 5 Carte a Tutti
+                        </button>
+                    </div>
+                </div>
+
+                <!-- GAME BOARD CENTER -->
+                <div class="flex-1 p-4 flex flex-col justify-between items-center relative overflow-y-auto">
+                    
+                    <!-- TOP: Opponents Hands Visual Representation (Only card backs visible) -->
+                    <div id="opponents-container" class="w-full flex justify-center items-center gap-4 min-h-[100px] pt-2">
+                        <div class="text-xs text-white/50 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur">In attesa di altri giocatori...</div>
+                    </div>
+
+                    <!-- CENTER: Global Deck & Played Cards Pile (Table State) -->
+                    <div class="my-auto flex items-center justify-center gap-8 py-6">
+                        
+                        <!-- Shared Deck -->
+                        <div class="text-center">
+                            <div id="deck-pile" onclick="playerDrawCard()" class="w-24 h-36 md:w-28 md:h-40 bg-gradient-to-br from-indigo-800 to-indigo-950 border-2 border-indigo-400/50 rounded-xl shadow-2xl flex flex-col items-center justify-center cursor-pointer transform hover:scale-105 transition border-dashed relative group">
+                                <div class="w-16 h-24 border border-indigo-300/20 rounded-lg flex items-center justify-center">
+                                    <i class="fa-solid fa-layer-group text-3xl text-indigo-300/80 group-hover:scale-110 transition"></i>
+                                </div>
+                                <span class="absolute -bottom-3 bg-indigo-600 text-white font-bold text-xs px-2.5 py-0.5 rounded-full shadow border border-indigo-300/30" id="deck-count">
+                                    52 carte
+                                </span>
+                            </div>
+                            <span class="text-[11px] text-indigo-200 font-medium mt-4 block">Clicca per Pescare</span>
+                        </div>
+
+                        <!-- Played Cards Table (Discards / Table Center) -->
+                        <div class="text-center">
+                            <div id="played-pile" class="w-24 h-36 md:w-28 md:h-40 border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center relative bg-black/20 backdrop-blur">
+                                <span id="empty-table-text" class="text-xs text-white/30 px-2 text-center">Tavolo Vuoto</span>
+                                <!-- Played card preview gets injected here -->
+                            </div>
+                            <span class="text-[11px] text-white/70 font-medium mt-4 block">Tavolo Gioco</span>
+                        </div>
+
+                    </div>
+
+                    <!-- BOTTOM: PRIVATE PLAYER HAND (Only visible to current user) -->
+                    <div class="w-full max-w-4xl flex flex-col items-center">
+                        <div class="flex items-center justify-between w-full mb-2 px-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-amber-400 uppercase tracking-wider bg-black/40 px-2.5 py-1 rounded-md backdrop-blur border border-amber-500/20">
+                                    <i class="fa-solid fa-lock text-amber-400 mr-1"></i> La tua Mano Privata (<span id="hand-count">0</span>)
+                                </span>
+                                <span class="text-[11px] text-slate-300 hidden sm:inline">(Solo tu vedi queste carte)</span>
+                            </div>
+                            <div id="turn-indicator" class="text-xs font-semibold px-3 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                                Stato: In attesa
+                            </div>
+                        </div>
+
+                        <!-- Cards Hand Container -->
+                        <div id="my-hand" class="w-full min-h-[140px] md:min-h-[160px] bg-black/30 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center justify-center gap-2 md:gap-3 overflow-x-auto">
+                            <div class="text-xs text-white/40 italic">Nessuna carta in mano. Entra in una stanza e pesca una carta!</div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- ================= SECTION 2: ARCHITECTURE GUIDE ================= -->
+        <section id="tab-guide" class="h-full overflow-y-auto p-4 md:p-8 bg-slate-900 hidden">
+            <div class="max-w-4xl mx-auto space-y-8 pb-12">
+                
+                <!-- Title Header -->
+                <div class="border-b border-slate-800 pb-6">
+                    <div class="inline-block bg-amber-500/10 text-amber-400 text-xs font-semibold px-3 py-1 rounded-full border border-amber-500/20 mb-3">
+                        Guida Tecnica & Architettura static-host
+                    </div>
+                    <h2 class="text-2xl md:text-3xl font-extrabold text-white">Come creare Card Game Multiplayer su GitHub Pages</h2>
+                    <p class="text-slate-400 mt-2 text-sm md:text-base leading-relaxed">
+                        GitHub Pages ospita solo file statici (HTML, CSS, JS) e **non possiede un backend/server Node.js**. Spieghiamo come superare questo limite mantenendo la privacy delle carte in mano tramite **PeerJS (WebRTC)**.
+                    </p>
+                </div>
+
+                <!-- Concept Cards Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <div class="bg-slate-950 border border-slate-800 p-5 rounded-xl space-y-3">
+                        <div class="w-10 h-10 bg-indigo-500/10 text-indigo-400 rounded-lg flex items-center justify-center text-xl font-bold">
+                            <i class="fa-solid fa-crown"></i>
+                        </div>
+                        <h3 class="font-bold text-lg text-white">1. Modello Host-Authority (Peer Master)</h3>
+                        <p class="text-sm text-slate-400 leading-relaxed">
+                            L'utente che "Crea la Stanza" diventa l'**Host**. L'Host conserva nel suo browser lo **stato segreto globale del mazzo** (es. l'ordine esatto delle carte non ancora pescate). Nessun altro client conosce il mazzo completo.
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-950 border border-slate-800 p-5 rounded-xl space-y-3">
+                        <div class="w-10 h-10 bg-amber-500/10 text-amber-400 rounded-lg flex items-center justify-center text-xl font-bold">
+                            <i class="fa-solid fa-user-shield"></i>
+                        </div>
+                        <h3 class="font-bold text-lg text-white">2. Data Privacy (Mano Privata)</h3>
+                        <p class="text-sm text-slate-400 leading-relaxed">
+                            Quando un giocatore pesca, l'Host invia i dati del seme/valore **esclusivamente al canale P2P privato** di quel giocatore. Agli altri avversari invia solo una notifica generica: <code class="bg-slate-900 text-amber-300 px-1.5 py-0.5 rounded text-xs">COUNT_UPDATE</code>.
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-950 border border-slate-800 p-5 rounded-xl space-y-3">
+                        <div class="w-10 h-10 bg-emerald-500/10 text-emerald-400 rounded-lg flex items-center justify-center text-xl font-bold">
+                            <i class="fa-solid fa-network-wired"></i>
+                        </div>
+                        <h3 class="font-bold text-lg text-white">3. PeerJS & WebRTC Signal Server Free</h3>
+                        <p class="text-sm text-slate-400 leading-relaxed">
+                            PeerJS offre un server di segnalazione cloud **gratuito**. Serve solo per far scambiare gli IP (handshake). Una volta stabilito il canale WebRTC, i messaggi viaggiano **direttamente da browser a browser** a latenza bassissima!
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-950 border border-slate-800 p-5 rounded-xl space-y-3">
+                        <div class="w-10 h-10 bg-rose-500/10 text-rose-400 rounded-lg flex items-center justify-center text-xl font-bold">
+                            <i class="fa-solid fa-github"></i>
+                        </div>
+                        <h3 class="font-bold text-lg text-white">4. Costo Zero Hosting</h3>
+                        <p class="text-sm text-slate-400 leading-relaxed">
+                            Poiché tutto il codice gira nel client dell'utente e il networking usa WebRTC P2P, l'hosting ha costo zero. Può supportare centinaia di partite contemporanee senza alcun server da pagare.
+                        </p>
+                    </div>
+
+                </div>
+
+                <!-- Protocol Sequence Diagram Code Explanation -->
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <h3 class="font-bold text-lg text-white flex items-center gap-2">
+                        <i class="fa-solid fa-code text-amber-500"></i> Flusso Messaggi P2P per Mantenere il Segreto
+                    </h3>
+                    <div class="bg-slate-900 p-4 rounded-lg font-mono text-xs text-slate-300 overflow-x-auto space-y-2 border border-slate-800">
+                        <div class="text-emerald-400">// 1. Giocatore A chiede di pescare una carta</div>
+                        <div>Player_A ──> [MSG: DRAW_REQUEST] ──> Host</div>
+                        <br>
+                        <div class="text-amber-400">// 2. L'Host estrae la carta dal mazzo globale ed invia il VALORE solo a Player A</div>
+                        <div>Host ──> [MSG: DRAW_RESPONSE {card: 'Asso di Picche'}] ──> Player_A (Canale Privato)</div>
+                        <br>
+                        <div class="text-indigo-400">// 3. L'Host notifica a TUTTI GLI ALTRI solo il conteggio aggiornato</div>
+                        <div>Host ──> [MSG: PLAYER_HAND_UPDATE {peerId: 'Player_A', count: 4}] ──> Broadcast a tutti</div>
+                    </div>
+                </div>
+
+                <!-- Deploy Step-by-Step for GitHub Pages -->
+                <div class="bg-gradient-to-br from-slate-950 to-slate-900 border border-amber-500/30 rounded-xl p-6 space-y-4">
+                    <h3 class="font-bold text-xl text-amber-400 flex items-center gap-2">
+                        <i class="fa-solid fa-rocket"></i> Come pubblicare questo progetto su GitHub Pages
+                    </h3>
+                    <ol class="list-decimal list-inside space-y-3 text-sm text-slate-300">
+                        <li class="pl-2">Crea un nuovo repository su GitHub (es. <code class="bg-slate-800 text-amber-300 px-2 py-0.5 rounded">card-game-p2p</code>).</li>
+                        <li class="pl-2">Copia questo singolo file HTML e salvalo come <code class="bg-slate-800 text-amber-300 px-2 py-0.5 rounded">index.html</code> nella root del repository.</li>
+                        <li class="pl-2">Fai il push del file sul tuo repository: <code class="bg-slate-800 text-slate-200 px-2 py-0.5 rounded">git add . && git commit -m "Initial commit" && git push</code>.</li>
+                        <li class="pl-2">Vai nelle impostazioni del repository GitHub: <strong>Settings &gt; Pages</strong>.</li>
+                        <li class="pl-2">Sotto <strong>Build and deployment</strong>, seleziona il branch <code class="bg-slate-800 text-slate-200 px-2 py-0.5 rounded">main</code> (o <code class="bg-slate-800 text-slate-200 px-2 py-0.5 rounded">master</code>) e la cartella <code class="bg-slate-800 text-slate-200 px-2 py-0.5 rounded">/(root)</code>. Premi <strong>Save</strong>.</li>
+                        <li class="pl-2">Dopo pochi secondi il tuo gioco sarà raggiungibile online all'indirizzo <code class="text-amber-400 font-mono">https://tuo-nome.github.io/card-game-p2p/</code>!</li>
+                    </ol>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- UI TOAST SYSTEM -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- JAVASCRIPT ARCHITECTURE & GAME LOGIC -->
+    <script>
+        /* ==========================================================================
+           1. GAME STATE & DATA MODELS
+           ========================================================================== */
+        const SUITS = [
+            { name: 'Spade', icon: '♠', color: 'text-slate-200' },
+            { name: 'Cuori', icon: '♥', color: 'text-rose-500' },
+            { name: 'Quadri', icon: '♦', color: 'text-amber-500' },
+            { name: 'Fiori', icon: '♣', color: 'text-emerald-400' }
+        ];
+
+        const VALUES = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+
+        // Local State
+        let myNickname = "Giocatore_" + Math.floor(Math.random() * 899 + 100);
+        let myPeerId = null;
+        let isHost = false;
+        let peer = null;
+        let hostConnection = null; // Used if client
+        let connections = {}; // Used if host: { peerId: DataConnection }
+        
+        // Game State Data
+        let myHand = []; // Private cards array: [{id, suit, value}]
+        let roomPlayers = {}; // { peerId: { name, handCount, isHost } }
+        let playedTableCard = null; // Shared card on the table
+
+        // Host-Only Master State
+        let masterDeck = [];
+
+        /* ==========================================================================
+           2. DOM ELEMENTS
+           ========================================================================== */
+        document.getElementById('nickname-input').value = myNickname;
+
+        function switchTab(tab) {
+            document.getElementById('tab-game').classList.toggle('hidden', tab !== 'game');
+            document.getElementById('tab-guide').classList.toggle('hidden', tab !== 'guide');
+            
+            document.getElementById('tab-game-btn').className = tab === 'game' 
+                ? 'px-3 md:px-4 py-1.5 rounded-md font-medium bg-amber-500 text-slate-950 transition-all flex items-center gap-2'
+                : 'px-3 md:px-4 py-1.5 rounded-md font-medium text-slate-300 hover:text-white transition-all flex items-center gap-2';
+                
+            document.getElementById('tab-guide-btn').className = tab === 'guide' 
+                ? 'px-3 md:px-4 py-1.5 rounded-md font-medium bg-amber-500 text-slate-950 transition-all flex items-center gap-2'
+                : 'px-3 md:px-4 py-1.5 rounded-md font-medium text-slate-300 hover:text-white transition-all flex items-center gap-2';
+        }
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-rose-900 border-rose-500' : (type === 'success' ? 'bg-emerald-900 border-emerald-500' : 'bg-slate-800 border-amber-500');
+            
+            toast.className = `${bgClass} text-white text-xs px-4 py-2.5 rounded-lg border shadow-xl flex items-center gap-2 pointer-events-auto transition-all transform duration-300`;
+            toast.innerHTML = `<i class="fa-solid fa-circle-info"></i> <span>${msg}</span>`;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        function logNetwork(msg) {
+            const logBox = document.getElementById('network-log');
+            const entry = document.createElement('div');
+            const time = new Date().toLocaleTimeString().split(' ')[0];
+            entry.innerHTML = `<span class="text-slate-500">[${time}]</span> ${msg}`;
+            logBox.appendChild(entry);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function updateNickname() {
+            const val = document.getElementById('nickname-input').value.trim();
+            if (val) {
+                myNickname = val;
+                showToast(`Nome salvato: ${myNickname}`, 'success');
+                // Broadcast nickname update if connected
+                broadcastMessage({ type: 'UPDATE_NAME', name: myNickname, peerId: myPeerId });
+                if (roomPlayers[myPeerId]) roomPlayers[myPeerId].name = myNickname;
+                renderPlayers();
+            }
+        }
+
+        /* ==========================================================================
+           3. PEERJS NETWORK ENGINE (P2P WEBRTC)
+           ========================================================================== */
+        
+        function initPeer(customId = null) {
+            return new Promise((resolve, reject) => {
+                // PeerJS uses public signaling server automatically
+                peer = customId ? new Peer(customId) : new Peer();
+
+                peer.on('open', (id) => {
+                    myPeerId = id;
+                    logNetwork(`PeerJS Inizializzato. Tuo ID: <b class="text-amber-400">${id}</b>`);
+                    resolve(id);
+                });
+
+                peer.on('connection', (conn) => {
+                    handleIncomingConnection(conn);
+                });
+
+                peer.on('error', (err) => {
+                    logNetwork(`<span class="text-rose-400">Errore PeerJS: ${err.type}</span>`);
+                    showToast(`Errore Connessione: ${err.type}`, 'error');
+                    reject(err);
+                });
+            });
+        }
+
+        // Host Function: Create Room
+        async function createRoom() {
+            try {
+                isHost = true;
+                const roomId = 'room-' + Math.random().toString(36).substring(2, 8);
+                await initPeer(roomId);
+
+                // Setup Host State
+                document.getElementById('role-badge').innerText = "HOST";
+                document.getElementById('role-badge').className = "px-2 py-0.5 text-xs rounded-full bg-amber-500 text-slate-950 font-bold";
+                document.getElementById('display-room-id').innerText = myPeerId;
+                document.getElementById('room-create-section').classList.add('hidden');
+                document.getElementById('room-active-section').classList.remove('hidden');
+                document.getElementById('host-controls').classList.remove('hidden');
+
+                // Initialize Master Deck
+                generateMasterDeck();
+
+                // Add Host to room players
+                roomPlayers[myPeerId] = { name: myNickname, handCount: 0, isHost: true };
+                renderPlayers();
+                showToast("Stanza Creata! Condividi l'ID con gli amici.", "success");
+
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Client Function: Join Room
+        async function joinRoom() {
+            const targetRoomId = document.getElementById('join-room-id').value.trim();
+            if (!targetRoomId) {
+                showToast("Inserisci un ID stanza valido", "error");
+                return;
+            }
+
+            try {
+                isHost = false;
+                await initPeer();
+
+                document.getElementById('role-badge').innerText = "GIOCATORE";
+                document.getElementById('role-badge').className = "px-2 py-0.5 text-xs rounded-full bg-indigo-500 text-white font-bold";
+                
+                logNetwork(`Connessione all'Host: ${targetRoomId}...`);
+                hostConnection = peer.connect(targetRoomId);
+
+                hostConnection.on('open', () => {
+                    logNetwork(`<span class="text-emerald-400">Connesso con successo all'Host!</span>`);
+                    document.getElementById('display-room-id').innerText = targetRoomId;
+                    document.getElementById('room-create-section').classList.add('hidden');
+                    document.getElementById('room-active-section').classList.remove('hidden');
+                    
+                    // Send Join Request to Host
+                    hostConnection.send({
+                        type: 'JOIN_REQUEST',
+                        name: myNickname,
+                        peerId: myPeerId
+                    });
+                });
+
+                hostConnection.on('data', (data) => {
+                    handleClientReceivedData(data);
+                });
+
+                hostConnection.on('close', () => {
+                    showToast("La connessione con l'Host si è interrotta", "error");
+                    logNetwork(`<span class="text-rose-400">Host disconnesso</span>`);
+                });
+
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Host Handling Incoming Client Connections
+        function handleIncomingConnection(conn) {
+            logNetwork(`Nuovo Peer sta tentando di connettersi: ${conn.peer}`);
+
+            conn.on('open', () => {
+                connections[conn.peer] = conn;
+            });
+
+            conn.on('data', (data) => {
+                handleHostReceivedData(conn.peer, data);
+            });
+
+            conn.on('close', () => {
+                logNetwork(`Peer disconnesso: ${conn.peer}`);
+                delete connections[conn.peer];
+                delete roomPlayers[conn.peer];
+                broadcastStateUpdate();
+                renderPlayers();
+            });
+        }
+
+        /* ==========================================================================
+           4. DATA PROTOCOL & P2P ROUTING
+           ========================================================================== */
+
+        // Host Protocol Handler
+        function handleHostReceivedData(senderPeerId, data) {
+            logNetwork(`RX da [${senderPeerId.substring(0,6)}]: <span class="text-amber-300">${data.type}</span>`);
+
+            switch(data.type) {
+                case 'JOIN_REQUEST':
+                    roomPlayers[senderPeerId] = { name: data.name, handCount: 0, isHost: false };
+                    showToast(`${data.name} è entrato nella stanza!`, 'info');
+                    broadcastStateUpdate();
+                    break;
+
+                case 'UPDATE_NAME':
+                    if (roomPlayers[senderPeerId]) {
+                        roomPlayers[senderPeerId].name = data.name;
+                        broadcastStateUpdate();
+                    }
+                    break;
+
+                case 'DRAW_REQUEST':
+                    // Host draws card from Master Deck for the player
+                    if (masterDeck.length > 0) {
+                        const drawnCard = masterDeck.pop();
+                        roomPlayers[senderPeerId].handCount += 1;
+
+                        // Send Card ONLY to requesting player (Privacy Rule!)
+                        if (senderPeerId === myPeerId) {
+                            myHand.push(drawnCard);
+                            renderMyHand();
+                        } else {
+                            connections[senderPeerId].send({
+                                type: 'RECEIVE_CARD',
+                                card: drawnCard
+                            });
+                        }
+
+                        broadcastStateUpdate();
+                    } else {
+                        showToast("Il mazzo è esaurito!", "error");
+                    }
+                    break;
+
+                case 'PLAY_CARD':
+                    // Player plays a card to the table
+                    if (roomPlayers[senderPeerId]) {
+                        roomPlayers[senderPeerId].handCount = Math.max(0, roomPlayers[senderPeerId].handCount - 1);
+                        playedTableCard = data.card;
+                        broadcastStateUpdate();
+                        showToast(`${roomPlayers[senderPeerId].name} ha giocato ${data.card.value} di ${data.card.suit.name}`);
+                    }
+                    break;
+            }
+        }
+
+        // Client Protocol Handler
+        function handleClientReceivedData(data) {
+            logNetwork(`RX dall'Host: <span class="text-amber-300">${data.type}</span>`);
+
+            switch(data.type) {
+                case 'STATE_UPDATE':
+                    roomPlayers = data.roomPlayers;
+                    playedTableCard = data.playedTableCard;
+                    document.getElementById('deck-count').innerText = `${data.deckCount} carte`;
+                    renderPlayers();
+                    renderPlayedTableCard();
+                    break;
+
+                case 'RECEIVE_CARD':
+                    myHand.push(data.card);
+                    renderMyHand();
+                    showToast(`Hai pescato: ${data.card.value} di ${data.card.suit.name}`, 'success');
+                    break;
+
+                case 'RESET_HAND':
+                    myHand = [];
+                    renderMyHand();
+                    showToast("L'Host ha resettato le mani di gioco");
+                    break;
+            }
+        }
+
+        // Broadcast State to ALL connected peers (Host Only)
+        function broadcastStateUpdate() {
+            if (!isHost) return;
+
+            const statePayload = {
+                type: 'STATE_UPDATE',
+                roomPlayers: roomPlayers,
+                playedTableCard: playedTableCard,
+                deckCount: masterDeck.length
+            };
+
+            // Update local host UI
+            document.getElementById('deck-count').innerText = `${masterDeck.length} carte`;
+            renderPlayers();
+            renderPlayedTableCard();
+
+            // Send to all connected clients
+            Object.values(connections).forEach(conn => {
+                if (conn.open) conn.send(statePayload);
+            });
+        }
+
+        /* ==========================================================================
+           5. GAME LOGIC & ACTIONS
+           ========================================================================== */
+
+        function generateMasterDeck() {
+            masterDeck = [];
+            let cardId = 1;
+            SUITS.forEach(suit => {
+                VALUES.forEach(val => {
+                    masterDeck.push({
+                        id: cardId++,
+                        suit: suit,
+                        value: val
+                    });
+                });
+            });
+            // Fisher-Yates Shuffle
+            for (let i = masterDeck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [masterDeck[i], masterDeck[j]] = [masterDeck[j], masterDeck[i]];
+            }
+            logNetwork("Mazzo Globale generato e mescolato.");
+        }
+
+        function hostResetDeck() {
+            if (!isHost) return;
+            generateMasterDeck();
+            playedTableCard = null;
+            
+            // Reset player hand counts
+            Object.keys(roomPlayers).forEach(pId => {
+                roomPlayers[pId].handCount = 0;
+            });
+
+            myHand = [];
+            renderMyHand();
+
+            // Notify clients to clear hand
+            Object.values(connections).forEach(conn => {
+                if (conn.open) conn.send({ type: 'RESET_HAND' });
+            });
+
+            broadcastStateUpdate();
+            showToast("Mazzo e tavolo resettati dall'Host!", "info");
+        }
+
+        function hostDealInitialCards() {
+            if (!isHost) return;
+            if (masterDeck.length < Object.keys(roomPlayers).length * 5) {
+                showToast("Carte insufficienti nel mazzo!", "error");
+                return;
+            }
+
+            Object.keys(roomPlayers).forEach(pId => {
+                for (let i = 0; i < 5; i++) {
+                    const drawnCard = masterDeck.pop();
+                    roomPlayers[pId].handCount += 1;
+
+                    if (pId === myPeerId) {
+                        myHand.push(drawnCard);
+                    } else if (connections[pId] && connections[pId].open) {
+                        connections[pId].send({
+                            type: 'RECEIVE_CARD',
+                            card: drawnCard
+                        });
+                    }
+                }
+            });
+
+            renderMyHand();
+            broadcastStateUpdate();
+            showToast("Distribuite 5 carte a tutti i giocatori!", "success");
+        }
+
+        function playerDrawCard() {
+            if (!peer || peer.disconnected) {
+                showToast("Devi prima creare o entrare in una stanza!", "error");
+                return;
+            }
+
+            if (isHost) {
+                handleHostReceivedData(myPeerId, { type: 'DRAW_REQUEST' });
+            } else {
+                if (hostConnection && hostConnection.open) {
+                    hostConnection.send({ type: 'DRAW_REQUEST' });
+                }
+            }
+        }
+
+        function playerPlayCard(cardIndex) {
+            const card = myHand[cardIndex];
+            if (!card) return;
+
+            // Remove card from private hand
+            myHand.splice(cardIndex, 1);
+            renderMyHand();
+
+            if (isHost) {
+                handleHostReceivedData(myPeerId, { type: 'PLAY_CARD', card: card });
+            } else {
+                if (hostConnection && hostConnection.open) {
+                    hostConnection.send({ type: 'PLAY_CARD', card: card });
+                }
+            }
+        }
+
+        /* ==========================================================================
+           6. RENDER & UI UPDATES
+           ========================================================================== */
+
+        function renderPlayers() {
+            const list = document.getElementById('players-list');
+            const opponents = document.getElementById('opponents-container');
+            list.innerHTML = '';
+            opponents.innerHTML = '';
+
+            const players = Object.entries(roomPlayers);
+            document.getElementById('player-count').innerText = players.length;
+
+            if (players.length === 0) {
+                list.innerHTML = `<div class="text-xs text-slate-500 italic text-center py-2">Nessuna stanza attiva</div>`;
+                opponents.innerHTML = `<div class="text-xs text-white/50 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur">In attesa di altri giocatori...</div>`;
+                return;
+            }
+
+            players.forEach(([id, p]) => {
+                // Render List item in sidebar
+                const item = document.createElement('div');
+                item.className = "flex items-center justify-between bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800 text-xs";
+                item.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid ${p.isHost ? 'fa-crown text-amber-400' : 'fa-user text-slate-400'}"></i>
+                        <span class="font-medium ${id === myPeerId ? 'text-amber-300 font-bold' : 'text-slate-200'}">${p.name} ${id === myPeerId ? '(Tu)' : ''}</span>
+                    </div>
+                    <span class="font-mono text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded text-[10px]">${p.handCount} carte</span>
+                `;
+                list.appendChild(item);
+
+                // Render Opponent visual avatar on top table (skip self)
+                if (id !== myPeerId) {
+                    const opp = document.createElement('div');
+                    opp.className = "flex flex-col items-center bg-black/40 backdrop-blur border border-white/10 p-2 rounded-xl text-center min-w-[90px]";
+                    
+                    let cardsVisual = '';
+                    const displayCards = Math.min(p.handCount, 6);
+                    for(let i=0; i<displayCards; i++) {
+                        cardsVisual += `<div class="w-4 h-6 bg-gradient-to-br from-indigo-700 to-indigo-900 border border-indigo-400 rounded-sm -ml-2 first:ml-0 shadow"></div>`;
+                    }
+
+                    opp.innerHTML = `
+                        <div class="text-xs font-semibold text-slate-200 mb-1 flex items-center gap-1">
+                            ${p.isHost ? '<i class="fa-solid fa-crown text-amber-400 text-[10px]"></i>' : ''} ${p.name}
+                        </div>
+                        <div class="flex items-center justify-center my-1">
+                            ${p.handCount > 0 ? cardsVisual : '<span class="text-[10px] text-white/40 italic">Mano Vuota</span>'}
+                        </div>
+                        <span class="text-[10px] text-amber-400 font-mono">${p.handCount} carte</span>
+                    `;
+                    opponents.appendChild(opp);
+                }
+            });
+
+            if (opponents.children.length === 0) {
+                opponents.innerHTML = `<div class="text-xs text-white/50 bg-black/30 px-3 py-1.5 rounded-full backdrop-blur">In attesa di altri giocatori connessi...</div>`;
+            }
+        }
+
+        function renderMyHand() {
+            const handContainer = document.getElementById('my-hand');
+            document.getElementById('hand-count').innerText = myHand.length;
+            handContainer.innerHTML = '';
+
+            if (myHand.length === 0) {
+                handContainer.innerHTML = `<div class="text-xs text-white/40 italic py-4">Nessuna carta in mano. Entra in una stanza e pesca dal mazzo!</div>`;
+                return;
+            }
+
+            myHand.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = "w-20 h-28 md:w-24 md:h-36 bg-slate-950 border-2 border-slate-700 rounded-xl p-2 flex flex-col justify-between select-none cursor-pointer card-transition shrink-0 relative group shadow-xl";
+                cardEl.onclick = () => playerPlayCard(index);
+
+                cardEl.innerHTML = `
+                    <div class="flex justify-between items-center text-xs md:text-sm font-bold ${card.suit.color}">
+                        <span>${card.value}</span>
+                        <span>${card.suit.icon}</span>
+                    </div>
+                    <div class="text-2xl md:text-4xl text-center ${card.suit.color}">
+                        ${card.suit.icon}
+                    </div>
+                    <div class="flex justify-between items-center text-xs md:text-sm font-bold ${card.suit.color} rotate-180">
+                        <span>${card.value}</span>
+                        <span>${card.suit.icon}</span>
+                    </div>
+                    <div class="absolute inset-0 bg-amber-500/10 opacity-0 group-hover:opacity-100 rounded-xl transition flex items-center justify-center">
+                        <span class="bg-amber-500 text-slate-950 text-[10px] font-extrabold px-2 py-1 rounded shadow uppercase">Gioca</span>
+                    </div>
+                `;
+                handContainer.appendChild(cardEl);
+            });
+        }
+
+        function renderPlayedTableCard() {
+            const container = document.getElementById('played-pile');
+            const emptyText = document.getElementById('empty-table-text');
+
+            if (!playedTableCard) {
+                emptyText.style.display = 'block';
+                const oldCard = container.querySelector('.played-card-item');
+                if (oldCard) oldCard.remove();
+                return;
+            }
+
+            emptyText.style.display = 'none';
+
+            let cardEl = container.querySelector('.played-card-item');
+            if (!cardEl) {
+                cardEl = document.createElement('div');
+                cardEl.className = "played-card-item w-20 h-28 md:w-24 md:h-36 bg-slate-950 border-2 border-amber-400 rounded-xl p-2 flex flex-col justify-between select-none shadow-2xl transform rotate-3 animate-pulse";
+                container.appendChild(cardEl);
+            }
+
+            cardEl.innerHTML = `
+                <div class="flex justify-between items-center text-xs md:text-sm font-bold ${playedTableCard.suit.color}">
+                    <span>${playedTableCard.value}</span>
+                    <span>${playedTableCard.suit.icon}</span>
+                </div>
+                <div class="text-2xl md:text-4xl text-center ${playedTableCard.suit.color}">
+                    ${playedTableCard.suit.icon}
+                </div>
+                <div class="flex justify-between items-center text-xs md:text-sm font-bold ${playedTableCard.suit.color} rotate-180">
+                    <span>${playedTableCard.value}</span>
+                    <span>${playedTableCard.suit.icon}</span>
+                </div>
+            `;
+        }
+
+        function copyRoomLink() {
+            const url = window.location.href.split('?')[0] + '?room=' + myPeerId;
+            navigator.clipboard.writeText(myPeerId).then(() => {
+                showToast("ID Stanza copiato negli appunti!", "success");
+            }).catch(() => {
+                // Fallback copy
+                const el = document.createElement('textarea');
+                el.value = myPeerId;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                showToast("ID Stanza copiato negli appunti!", "success");
+            });
+        }
+
+        // Auto join from URL Param if present
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomId = urlParams.get('room');
+            if (roomId) {
+                document.getElementById('join-room-id').value = roomId;
+                showToast("ID Stanza rilevato dall'URL!", "info");
+            }
+        });
+
+    </script>
+</body>
+</html>
